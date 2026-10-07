@@ -2478,8 +2478,7 @@ function timingApproved(){
 }
 function timingLockedStep(k){
   if(timingApproved() || !isStepPage(k)) return false;
-  const a=ordered(), gate=a.findIndex(x=>x.key==='C1'), target=a.findIndex(x=>x.key===k);
-  return gate>=0 && target>gate;
+  return k === 'A11';
 }
 function approveText(){
   const e=valueOf('EPS_S'), r=valueOf('RESET_S');
