@@ -992,7 +992,7 @@ fi`];
 clean_err(){ grep -v -E 'Class AVF(FrameReceiver|AudioReceiver) is implemented in both|WARNING: AVCaptureDeviceTypeExternal is deprecated for Continuity Cameras' "$ERR" >&2 || true; }
 if python "$HOME/FollowMe/{{WORKSHOP}}/5 Run and evaluate/camera-alignment/align_camera.py" \
   --camera-index {{CAM}} \
-  --reference "$HOME/FollowMe/{{WORKSHOP}}/5 Run and evaluate/camera-alignment/reference_from_dataset.png" \
+  --reference "$HOME/FollowMe/{{WORKSHOP}}/3 Record/camera-position/camera_at_start_of_recording.png" \
   --save "$HOME/FollowMe/{{WORKSHOP}}/5 Run and evaluate/camera-alignment/aligned_comparison.png" 2>"$ERR"; then
   clean_err
   rm -f "$ERR"
@@ -1000,7 +1000,7 @@ else
   STATUS=$?
   clean_err
   rm -f "$ERR"
-  exit "$STATUS"
+  printf '\nSTOP. Camera alignment did not complete.\n\n'
 fi`;
       st.cmds = [st.cmds[0].slice(0, cut) + '\n\n' + newTail];
     }
@@ -1577,7 +1577,7 @@ function verifyStep(r){
 conda activate lerobot
 export HF_LEROBOT_CALIBRATION="$HOME/FollowMe/{{WORKSHOP}}/calibration"
 POLICY="${policy}"
-REF="$HOME/FollowMe/{{WORKSHOP}}/5 Run and evaluate/camera-alignment/reference_from_dataset.png"
+REF="$HOME/FollowMe/{{WORKSHOP}}/3 Record/camera-position/camera_at_start_of_recording.png"
 CAL=$(find "$HF_LEROBOT_CALIBRATION" -type f -name "{{FOLLOWER}}.json" -print -quit 2>/dev/null)
 P=0
 [ -f "$POLICY/config.json" ] && [ -f "$POLICY/model.safetensors" ] || { printf 'STOP  policy\n'; P=1; }
@@ -1785,7 +1785,7 @@ printf '\n'`;
     const verify=String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
 conda activate lerobot
 export HF_LEROBOT_CALIBRATION="$HOME/FollowMe/{{WORKSHOP}}/calibration"
-REF="$HOME/FollowMe/{{WORKSHOP}}/5 Run and evaluate/camera-alignment/reference_from_dataset.png"
+REF="$HOME/FollowMe/{{WORKSHOP}}/3 Record/camera-position/camera_at_start_of_recording.png"
 DATA="$HOME/lerobot_data/so101_{{DS}}_curated/meta/info.json"
 CAL=$(find "$HF_LEROBOT_CALIBRATION" -type f -name "{{FOLLOWER}}.json" -print -quit 2>/dev/null)
 P=0
@@ -1865,6 +1865,55 @@ function moveCheckSetupAfterPolicyReturn(){
   applyXfer();
 }
 moveCheckSetupAfterPolicyReturn();
+
+function normalizeCameraReference(){
+  const ensureRef = String.raw`REF_DIR="$HOME/FollowMe/{{WORKSHOP}}/3 Record/camera-position"
+REF="$REF_DIR/camera_at_start_of_recording.png"
+mkdir -p "$REF_DIR"
+if [ ! -f "$REF" ]; then
+  FOUND=$(find "$HOME/FollowMe/{{WORKSHOP}}" -type f -name 'camera_at_start_of_recording.png' -print -quit 2>/dev/null)
+  if [ -z "$FOUND" ]; then
+    FOUND=$(find "$HOME/FollowMe/{{WORKSHOP}}" -type f -name 'reference_from_dataset.png' -print -quit 2>/dev/null)
+  fi
+  if [ -n "$FOUND" ] && [ "$FOUND" != "$REF" ]; then
+    cp "$FOUND" "$REF" 2>/dev/null || true
+  fi
+fi
+if [ ! -f "$REF" ] && [ -f "$HOME/lerobot_data/so101_{{DS}}_curated/meta/info.json" ]; then
+  python - "$REF" <<'PY' 2> >(grep -v -E 'AVCaptureDeviceTypeExternal is deprecated|Class AVF(FrameReceiver|AudioReceiver)' >&2)
+import os, sys
+import cv2
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+out=os.path.expanduser(sys.argv[1])
+os.makedirs(os.path.dirname(out), exist_ok=True)
+d=LeRobotDataset('local/so101_{{DS}}_curated', root=os.path.expanduser('~/lerobot_data/so101_{{DS}}_curated'), video_backend='pyav')
+rgb=(d[0]['observation.images.front'].numpy().transpose(1,2,0)*255).clip(0,255).astype('uint8')
+img=cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+if not cv2.imwrite(out,img):
+    raise SystemExit(1)
+PY
+fi`;
+
+  Object.keys(ALLSTEPS).forEach(r=>{
+    let arr=ALLSTEPS[r].filter(x=>x.key!=='A23');
+    const check=arr.find(x=>x.key==='R1');
+    if(check && check.cmds && check.cmds.length>1){
+      check.cmds[1]=ensureRef+'\n'+check.cmds[1];
+    }
+    const align=arr.find(x=>x.key==='A24');
+    if(align && align.cmds && align.cmds[0]){
+      align.cmds[0]=ensureRef+String.raw`
+if [ -f "$REF" ]; then
+`+align.cmds[0]+String.raw`
+else
+  printf '\nSTOP. Camera reference was not found.\n\n'
+fi`;
+    }
+    ALLSTEPS[r]=arr;
+  });
+  applyXfer();
+}
+normalizeCameraReference();
 
 const _pickHtml = pickHtml;
 pickHtml = function(s){
