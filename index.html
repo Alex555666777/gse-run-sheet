@@ -1915,6 +1915,42 @@ fi`;
 }
 normalizeCameraReference();
 
+function applyFollowerAndBaselineClarity(){
+  Object.keys(ALLSTEPS).forEach(r=>{
+    const arr=ALLSTEPS[r];
+    const ready=arr.find(x=>x.key==='A25');
+    if(ready){
+      ready.intro='';
+      ready.what='Switch the follower on. Press Copy, paste into Terminal, press Enter.';
+      ready.warn='';
+      ready.after='';
+      ready.looks=['FOLLOWER READY'];
+      if(ready.cmds && ready.cmds[0]){
+        ready.cmds[0]=ready.cmds[0]
+          .replace('print("READY TO RUN THE POLICY")\\n    print("Follower fully connected and configured on " + PORT)', 'print("FOLLOWER READY")\\n    print(PORT)');
+      }
+    }
+    const run=arr.find(x=>x.key==='A26');
+    if(run){
+      run.intro='';
+      run.what='Choose A → B or B → A. Put the object on that start mark. Press Copy, paste into Terminal, press Enter.';
+      run.warn='';
+      run.slow='';
+      run.after='If it misses or does not move, continue to Benchmark.';
+      run.looks=['Rollout finished'];
+    }
+    const bench=arr.find(x=>x.key==='A27');
+    if(bench){
+      bench.intro='';
+      bench.what='Choose A → B. Run five tries and enter the score. Then choose B → A and do the same.';
+      bench.warn='';
+      bench.after='Enter both scores, then continue.';
+    }
+  });
+  applyXfer();
+}
+applyFollowerAndBaselineClarity();
+
 const _pickHtml = pickHtml;
 pickHtml = function(s){
   if(s && s.pick && s.pick.k === 'BMARK'){
@@ -3705,6 +3741,357 @@ document.addEventListener('click', e => {
   route = next; save();
   rerenderKeep();
 });
+
+// v7 calibration continuity fix
+function applyCalibrationContinuityFix(){
+  const envLine='export HF_LEROBOT_CALIBRATION="$HOME/FollowMe/{{WORKSHOP}}/calibration"\n';
+
+  Object.keys(ALLSTEPS).forEach(r=>{
+    const arr=ALLSTEPS[r];
+
+    arr.forEach(step=>{
+      if(!step.cmds) return;
+      step.cmds=step.cmds.map(c=>String(c).split(envLine).join(''));
+    });
+
+    const cal=arr.find(x=>x.key==='A7');
+    if(cal){
+      cal.cmds=[String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lerobot
+unset HF_LEROBOT_CALIBRATION
+lerobot-calibrate --teleop.type=so101_leader --teleop.port={{LPORT}} --teleop.id={{LEADER}}
+STATUS=$?
+if [ "$STATUS" -eq 0 ]; then
+  SRC="$HOME/.cache/huggingface/lerobot/calibration/teleoperators/so_leader/{{LEADER}}.json"
+  DST="$HOME/FollowMe/{{WORKSHOP}}/calibration/teleoperators/so_leader/{{LEADER}}.json"
+  mkdir -p "$(dirname "$DST")"
+  if [ -f "$SRC" ]; then cp "$SRC" "$DST" && printf '\nLEADER CALIBRATION SAVED\n'; fi
+fi`,String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lerobot
+unset HF_LEROBOT_CALIBRATION
+lerobot-calibrate --robot.type=so101_follower --robot.port={{FPORT}} --robot.id={{FOLLOWER}}
+STATUS=$?
+if [ "$STATUS" -eq 0 ]; then
+  SRC="$HOME/.cache/huggingface/lerobot/calibration/robots/so_follower/{{FOLLOWER}}.json"
+  DST="$HOME/FollowMe/{{WORKSHOP}}/calibration/robots/so_follower/{{FOLLOWER}}.json"
+  mkdir -p "$(dirname "$DST")"
+  if [ -f "$SRC" ]; then cp "$SRC" "$DST" && printf '\nFOLLOWER CALIBRATION SAVED\n'; fi
+fi`];
+      cal.looks=['Calibration saved to, then LEADER CALIBRATION SAVED','Calibration saved to, then FOLLOWER CALIBRATION SAVED'];
+    }
+
+    const check=arr.find(x=>x.title==='Check setup');
+    if(check && check.cmds){
+      check.cmds=check.cmds.map((c,i)=>{
+        let x=String(c).split(envLine).join('');
+        if(i===check.cmds.length-1 || x.includes('READY TO CONTINUE') || x.includes('READY TO TEST')){
+          x=x.replace(
+            'CAL=$(find "$HF_LEROBOT_CALIBRATION" -type f -name "{{FOLLOWER}}.json" -print -quit 2>/dev/null)',
+`CAL="$HOME/.cache/huggingface/lerobot/calibration/robots/so_follower/{{FOLLOWER}}.json"
+if [ ! -f "$CAL" ]; then
+  BACK=$(find "$HOME/FollowMe/{{WORKSHOP}}/calibration" -type f \( -name "{{FOLLOWER}}.json" -o -name "follower.json" \) -print -quit 2>/dev/null)
+  if [ -n "$BACK" ]; then
+    mkdir -p "$(dirname "$CAL")"
+    cp "$BACK" "$CAL" && printf 'RESTORED  calibration\n'
+  fi
+fi`);
+          x=x.replace('[ -n "$CAL" ]','[ -f "$CAL" ]');
+        }
+        return x;
+      });
+    }
+
+    const ready=arr.find(x=>x.key==='A25');
+    if(ready){
+      ready.what='Switch the follower arm on and check its USB cable is in.\nPress Copy, paste into Terminal, press Enter.';
+      ready.cmds=[String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lerobot
+unset HF_LEROBOT_CALIBRATION
+CAL="$HOME/.cache/huggingface/lerobot/calibration/robots/so_follower/{{FOLLOWER}}.json"
+if [ ! -f "$CAL" ]; then
+  BACK=$(find "$HOME/FollowMe/{{WORKSHOP}}/calibration" -type f \( -name "{{FOLLOWER}}.json" -o -name "follower.json" \) -print -quit 2>/dev/null)
+  if [ -n "$BACK" ]; then
+    mkdir -p "$(dirname "$CAL")"
+    cp "$BACK" "$CAL"
+  fi
+fi
+if [ ! -f "$CAL" ]; then
+  printf '\nSTOP. Saved follower calibration was not found.\n\n'
+else
+  CAL_FILE="$CAL" PORT="{{FPORT}}" ROBOT_ID="{{FOLLOWER}}" python - <<'PY'
+import builtins, os
+from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
+
+cal=os.environ["CAL_FILE"]
+port=os.environ["PORT"]
+rid=os.environ["ROBOT_ID"]
+if not os.path.isfile(cal):
+    raise SystemExit("STOP. Saved follower calibration was not found.")
+
+builtins.input=lambda prompt="": (print(prompt, end="", flush=True), "")[1]
+robot=SO101Follower(SO101FollowerConfig(port=port,id=rid,use_degrees=True))
+try:
+    robot.connect()
+    print("\nFOLLOWER READY")
+finally:
+    try:
+        robot.disconnect()
+    except Exception:
+        pass
+PY
+fi`];
+      ready.looks=['FOLLOWER READY'];
+      ready.after='';
+      ready.intro='';
+      ready.stuck=[
+        {t:'It says Saved follower calibration was not found: do Calibrate both arms again.',c:'',go:'A7'},
+        {t:'It says Failed to write, Torque_Enable, Lock, or no status packet: switch the follower off, wait five seconds, push its power plug and motor cables in firmly, switch it on, then do this step again.',c:''},
+        {t:'It says the port is missing: do Find both arms’ USB ports again.',c:'',go:'A5'}
+      ];
+    }
+  });
+}
+applyCalibrationContinuityFix();
+
+// v8: match the recorded starting scene before policy rollout.
+function applyRecordedStartPoseFix(){
+  Object.keys(ALLSTEPS).forEach(r=>{
+    const arr=ALLSTEPS[r];
+    const align=arr.find(x=>x.key==='A24');
+    if(align){
+      align.title='Match the starting scene';
+      align.intro='';
+      align.what='Switch the follower off. Match the camera, follower and object to the saved image. Switch the follower on. Press Copy, paste into Terminal, press Enter.';
+      align.warn='';
+      align.slow='';
+      align.after='';
+      align.looks=['COMPARISON SAVED'];
+    }
+    const run=arr.find(x=>x.key==='A26');
+    if(run){
+      run.intro='';
+      run.what='Choose A → B or B → A. Put the object on that start mark and match the follower to the saved starting pose. Press Copy, paste into Terminal, press Enter.';
+      run.warn='';
+      run.slow='';
+      run.after='If it misses or barely moves, continue to Benchmark.';
+      if(run.cmds){
+        run.cmds=run.cmds.map(c=>String(c).replace('--return_to_initial_position=false','--return_to_initial_position=true'));
+      }
+    }
+  });
+  applyXfer();
+}
+applyRecordedStartPoseFix();
+
+// v9: save representative A/B follower start poses from the curated dataset and restore them before rollout.
+function recordedStartPoseBuildShell(){
+  return String.raw`POSE_DIR="$HOME/FollowMe/{{WORKSHOP}}/3 Record/start-pose"
+POSE="$POSE_DIR/recorded_start_pose.json"
+mkdir -p "$POSE_DIR"
+if [ ! -f "$POSE" ] && [ -f "$HOME/lerobot_data/so101_{{DS}}_curated/meta/info.json" ]; then
+  python - "$POSE" "{{EPMARK}}" <<'PY'
+import json, os, statistics, sys
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+out=os.path.expanduser(sys.argv[1])
+per=int(sys.argv[2])
+root=os.path.expanduser("~/lerobot_data/so101_{{DS}}_curated")
+d=LeRobotDataset("local/so101_{{DS}}_curated", root=root, video_backend="pyav")
+if d.num_episodes < per*2:
+    raise SystemExit("STOP. Dataset does not contain both start marks.")
+
+names=["shoulder_pan.pos","shoulder_lift.pos","elbow_flex.pos","wrist_flex.pos","wrist_roll.pos","gripper.pos"]
+
+def first_state(ep_index):
+    ep=d.meta.episodes[ep_index]
+    idx=int(ep["dataset_from_index"])
+    x=d[idx]["observation.state"]
+    if hasattr(x,"detach"):
+        x=x.detach().cpu().numpy()
+    return [float(v) for v in x]
+
+def representative(indices):
+    rows=[first_state(i) for i in indices]
+    return [float(statistics.median(row[j] for row in rows)) for j in range(len(names))]
+
+payload={
+    "names":names,
+    "A":representative(range(0,per)),
+    "B":representative(range(per,per*2)),
+    "episodes_per_mark":per,
+    "dataset":"so101_{{DS}}_curated"
+}
+os.makedirs(os.path.dirname(out),exist_ok=True)
+with open(out,"w") as f:
+    json.dump(payload,f,indent=2)
+print("START POSES SAVED",out)
+PY
+fi`;
+}
+function poseAwareRolloutOnly(policy,duration,returnHome){
+  return String.raw`lerobot-rollout \
+  --strategy.type=base \
+  --policy.path="${policy}" \
+  --robot.type=so101_follower \
+  --robot.port={{FPORT}} \
+  --robot.id={{FOLLOWER}} \
+  --robot.cameras="{front: {type: opencv, index_or_path: {{CAM}}, width: 1280, height: 720, fps: 30, warmup_s: 10}}" \
+  --task="{{TASK}}" \
+  --fps=30 \
+  --interpolation_multiplier=2 \
+  --duration=${duration} \
+  --policy.device=mps \
+  --display_data=false \
+  --play_sounds=false \
+  --return_to_initial_position=${returnHome?'true':'false'} \
+  2> >(grep -v -E 'Class AVF(FrameReceiver|AudioReceiver) is implemented in both|WARNING: AVCaptureDeviceTypeExternal is deprecated for Continuity Cameras' >&2)`;
+}
+function recordedPoseMoveShell(){
+  return String.raw`POSE="$HOME/FollowMe/{{WORKSHOP}}/3 Record/start-pose/recorded_start_pose.json"
+POSE_OK=0
+if [ -f "$POSE" ]; then
+  POSE_FILE="$POSE" START_MARK="$START" PORT="{{FPORT}}" ROBOT_ID="{{FOLLOWER}}" python - <<'PY'
+import builtins, json, math, os, time
+from lerobot.robots.so_follower import SO101Follower, SO101FollowerConfig
+
+pose_file=os.environ["POSE_FILE"]
+start=os.environ["START_MARK"]
+port=os.environ["PORT"]
+rid=os.environ["ROBOT_ID"]
+with open(pose_file) as f:
+    data=json.load(f)
+names=data["names"]
+vals=data.get(start)
+if not vals or len(vals)!=len(names):
+    raise SystemExit("STOP. Recorded start pose is missing for mark "+start)
+target={k:float(v) for k,v in zip(names,vals)}
+
+builtins.input=lambda prompt="": (print(prompt,end="",flush=True),"")[1]
+robot=SO101Follower(SO101FollowerConfig(port=port,id=rid,use_degrees=True,max_relative_target=3.0))
+try:
+    robot.connect()
+    obs=robot.get_observation()
+    current={k:float(obs[k]) for k in names}
+    max_delta=max(abs(target[k]-current[k]) for k in names)
+    steps=max(1,min(100,int(math.ceil(max_delta/2.0))))
+    for n in range(1,steps+1):
+        t=n/steps
+        robot.send_action({k:current[k]+(target[k]-current[k])*t for k in names})
+        time.sleep(0.05)
+    time.sleep(0.25)
+    final=robot.get_observation()
+    err=max(abs(float(final[k])-target[k]) for k in names)
+    if err>6.0:
+        raise SystemExit("STOP. Follower did not reach the recorded start pose.")
+    print("START POSE READY")
+finally:
+    try:
+        robot.disconnect()
+    except Exception:
+        pass
+PY
+  [ $? -eq 0 ] && POSE_OK=1
+else
+  printf '\nSTOP. Recorded start pose was not found.\n\n'
+fi`;
+}
+function poseAwareRunCommand(policy,duration){
+  return String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lerobot
+unset HF_LEROBOT_CALIBRATION
+START="{{BMARK}}"
+if [ "$START" = "A" ]; then GOAL="B"; else GOAL="A"; fi
+printf '\n%s → %s. Put the object on mark %s, then press Enter. ' "$START" "$GOAL" "$START"
+read REPLY
+` + recordedStartPoseBuildShell() + String.raw`
+` + recordedPoseMoveShell() + String.raw`
+if [ "$POSE_OK" -eq 1 ]; then
+` + poseAwareRolloutOnly(policy,duration,true) + String.raw`
+fi`;
+}
+function poseAwareBenchmarkCommand(policy){
+  return String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lerobot
+unset HF_LEROBOT_CALIBRATION
+START="{{BMARK}}"
+if [ "$START" = "A" ]; then GOAL="B"; else GOAL="A"; fi
+` + recordedStartPoseBuildShell() + String.raw`
+` + recordedPoseMoveShell() + String.raw`
+if [ "$POSE_OK" -eq 1 ]; then
+  S=0
+  DONE=0
+  for RUN in 1 2 3 4 5; do
+    printf '\n%s → %s · run %s of 5. Put the object on mark %s, then press Enter. ' "$START" "$GOAL" "$RUN" "$START"
+    read REPLY
+    if ! ` + poseAwareRolloutOnly(policy,'{{EPOK}}',true) + String.raw`; then
+      printf '\nIt stopped. Open Didn’t work? under this step.\n'
+      break
+    fi
+    DONE=$((DONE + 1))
+    printf 'Did the object finish on mark %s? Type y or n, then press Enter: ' "$GOAL"
+    read REPLY
+    [ "$REPLY" = "y" ] && S=$((S + 1))
+  done
+  if [ "$DONE" -eq 5 ]; then
+    printf '\n%s → %s: %s out of 5. Type %s into box %s.\n\n' "$START" "$GOAL" "$S" "$S" "$START"
+  else
+    printf '\nOnly %s of 5 runs finished. Do this direction again.\n\n' "$DONE"
+  fi
+fi`;
+}
+function applyDatasetRecordedStartPose(){
+  Object.keys(ALLSTEPS).forEach(r=>{
+    const arr=ALLSTEPS[r];
+    const dataCheck=arr.find(x=>x.key==='A12');
+    if(dataCheck && dataCheck.cmds && dataCheck.cmds.length){
+      dataCheck.cmds[0]=String(dataCheck.cmds[0])+'\n'+recordedStartPoseBuildShell();
+      dataCheck.looks=['DATASET READY · START POSES SAVED'];
+    }
+
+    const setup=arr.find(x=>x.key==='R1' || x.title==='Check setup');
+    if(setup && setup.cmds && setup.cmds.length){
+      const i=setup.cmds.length-1;
+      let c=recordedStartPoseBuildShell()+'\n'+String(setup.cmds[i]);
+      c=c.replace('P=0\n', 'P=0\nPOSE="$HOME/FollowMe/{{WORKSHOP}}/3 Record/start-pose/recorded_start_pose.json"\n[ -f "$POSE" ] || { printf \'STOP  start pose\\n\'; P=1; }\n');
+      setup.cmds[i]=c;
+      if(setup.looks && setup.looks.length) setup.looks[setup.looks.length-1]='READY TO CONTINUE';
+    }
+
+    const align=arr.find(x=>x.key==='A24');
+    if(align){
+      align.title='Line up the camera';
+      align.nav='Line up camera';
+      align.intro='';
+      align.what='Press Copy, paste into Terminal, press Enter. Match the live camera to the saved image, then press Enter.';
+      align.warn=''; align.slow=''; align.after='';
+      align.looks=['COMPARISON SAVED'];
+    }
+
+    const p1=policyPath30(r,false), p2=policyPath30(r,true);
+    const run=arr.find(x=>x.key==='A26');
+    if(run){
+      run.intro=''; run.warn=''; run.slow=''; run.after='Continue to Benchmark.';
+      run.what='Choose a direction below. Put the object on its start mark. Press Copy, paste into Terminal, press Enter.';
+      run.cmds=[poseAwareRunCommand(p1,30)];
+      run.labels=['Run policy'];
+      run.boxdo=[]; run.boxafter=[];
+      run.looks=['START POSE READY, then Rollout finished'];
+      run.stuck=[
+        {t:'It says Recorded start pose was not found: do Dataset check, then this step again.',c:'',go:'A12'},
+        {t:'It says Follower did not reach the recorded start pose: switch follower power off, check the arm is clear, switch it on, then do Check the follower is ready and try again.',c:'',go:'A25'},
+        {t:'It looks on the wrong side or misses the object: count it as a miss in Benchmark.',c:''},
+        {t:'The arm fights, chatters hard, or heads into a collision: switch follower power off. Do Check the follower is ready again.',c:'',go:'A25'}
+      ];
+    }
+    const bench=arr.find(x=>x.key==='A27');
+    if(bench){ bench.cmds=[poseAwareBenchmarkCommand(p1)]; bench.looks=['START POSE READY, then a score out of 5']; }
+    const bench2=arr.find(x=>x.key==='A32');
+    if(bench2){ bench2.cmds=[poseAwareBenchmarkCommand(p2)]; bench2.looks=['START POSE READY, then a score out of 5']; }
+  });
+  applyXfer();
+}
+applyDatasetRecordedStartPose();
+
 render();
 window.scrollTo({top:0, behavior:'instant'});
 </script>
