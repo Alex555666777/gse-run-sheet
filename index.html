@@ -3756,28 +3756,30 @@ function applyCalibrationContinuityFix(){
 
     const cal=arr.find(x=>x.key==='A7');
     if(cal){
-      cal.cmds=[String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+      cal.cmds=[String.raw`(
+source "$HOME/miniforge3/etc/profile.d/conda.sh"
 conda activate lerobot
 unset HF_LEROBOT_CALIBRATION
-lerobot-calibrate --teleop.type=so101_leader --teleop.port={{LPORT}} --teleop.id={{LEADER}}
-STATUS=$?
-if [ "$STATUS" -eq 0 ]; then
+if lerobot-calibrate --teleop.type=so101_leader --teleop.port={{LPORT}} --teleop.id={{LEADER}}; then
   SRC="$HOME/.cache/huggingface/lerobot/calibration/teleoperators/so_leader/{{LEADER}}.json"
   DST="$HOME/FollowMe/{{WORKSHOP}}/calibration/teleoperators/so_leader/{{LEADER}}.json"
   mkdir -p "$(dirname "$DST")"
   if [ -f "$SRC" ]; then cp "$SRC" "$DST" && printf '\nLEADER CALIBRATION SAVED\n'; fi
-fi`,String.raw`source "$HOME/miniforge3/etc/profile.d/conda.sh"
+fi
+)`,String.raw`(
+source "$HOME/miniforge3/etc/profile.d/conda.sh"
 conda activate lerobot
 unset HF_LEROBOT_CALIBRATION
-lerobot-calibrate --robot.type=so101_follower --robot.port={{FPORT}} --robot.id={{FOLLOWER}}
-STATUS=$?
-if [ "$STATUS" -eq 0 ]; then
+if lerobot-calibrate --robot.type=so101_follower --robot.port={{FPORT}} --robot.id={{FOLLOWER}}; then
   SRC="$HOME/.cache/huggingface/lerobot/calibration/robots/so_follower/{{FOLLOWER}}.json"
   DST="$HOME/FollowMe/{{WORKSHOP}}/calibration/robots/so_follower/{{FOLLOWER}}.json"
   mkdir -p "$(dirname "$DST")"
   if [ -f "$SRC" ]; then cp "$SRC" "$DST" && printf '\nFOLLOWER CALIBRATION SAVED\n'; fi
-fi`];
-      cal.looks=['Calibration saved to, then LEADER CALIBRATION SAVED','Calibration saved to, then FOLLOWER CALIBRATION SAVED'];
+fi
+)`];
+      const calibrationPrompt='Paste only this command box and wait. If LeRobot finds a saved calibration, type `c` without quotes, then press Enter. Enter alone reuses the old calibration.';
+      cal.boxafter=cal.boxafter.map(() => calibrationPrompt+'\nAt the mid-range prompt, position the joints and press Enter. Move every listed joint through its range before pressing Enter again.');
+      cal.looks=['For a fresh calibration, look for LeRobot’s `Calibration saved to`, followed by `LEADER CALIBRATION SAVED`.','For a fresh calibration, look for LeRobot’s `Calibration saved to`, followed by `FOLLOWER CALIBRATION SAVED`.'];
     }
 
     const check=arr.find(x=>x.title==='Check setup');
@@ -4091,6 +4093,15 @@ function applyDatasetRecordedStartPose(){
   applyXfer();
 }
 applyDatasetRecordedStartPose();
+
+// Parse the entire pasted command before reading the operator's confirmation.
+Object.values(ALLSTEPS).forEach(steps => {
+  steps.filter(step => step.key === 'A26').forEach(step => {
+    step.cmds = step.cmds.map(cmd =>
+      '(\n' + cmd.replace(/(^|\n)read REPLY(?=\n|$)/, '$1read -r REPLY && [ -z "$REPLY" ] || exit 1') + '\n)'
+    );
+  });
+});
 
 render();
 window.scrollTo({top:0, behavior:'instant'});
