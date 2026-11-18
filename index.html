@@ -3262,6 +3262,18 @@ function policyReturnMethodHtml(s){
   const b=(v,t)=>'<button class="chip" data-xfer="'+v+'" aria-pressed="'+(x===v)+'">'+t+'</button>';
   return '<div class="chiprow" style="margin:0 0 18px">'+b('airdrop','AirDrop')+b('usb','USB stick')+b('hf','Hugging Face')+'</div>';
 }
+const MAC_PASTE_RETRY = '( retry=; echo Ready_to_copy_the_workshop_command_then_press_Enter; read -r reply && [ -z "$reply" ] && retry=$(mktemp) && pbpaste > "$retry" && [ -s "$retry" ] && zsh -n "$retry" && zsh "$retry"; result=$?; if [ -n "$retry" ]; then rm -f "$retry"; fi; exit "$result" )';
+
+function pasteRecoveryHtml(){
+  return '<details class="optblk"><summary><b>Paste came through garbled?</b></summary><div class="optbody">'
+    + '<p>Use this for a macOS Terminal command whose paste failed before it ran. If you see a continuation prompt, press Control+C to return to the normal prompt.</p>'
+    + '<ol class="what doit"><li>Copy the retry line below, paste it into Terminal, and press Enter.</li>'
+    + '<li>When Terminal says it is ready, click Copy on the original workshop command above.</li>'
+    + '<li>Return to Terminal and press Enter. The retry reads that command from the Mac clipboard and runs it from a temporary file.</li></ol>'
+    + '<div class="cmd bare"><button type="button" class="copy" data-paste-retry>Copy retry line</button><pre>'
+    + esc(MAC_PASTE_RETRY) + '</pre></div></div></details>';
+}
+
 function stepHtml(s, i){
   const multi = s.cmds.length > 1 && !!s.boxdo;
   const num = {n: 1};
@@ -3344,6 +3356,7 @@ function stepHtml(s, i){
     + archAtStep(s.key)
     + (s.approve && s.inlineAfter ? approveHtml() : '')
     + stuck
+    + (s.cmds.length ? pasteRecoveryHtml() : '')
     + '</div>' + footerHtml(s.key, !!stuck) + '</section>';
 }
 
@@ -3609,6 +3622,8 @@ document.addEventListener('click', e => {
   if(cs){ copyText(cs, supportNotes().join('\n'), 'Copy'); return; }
   const gc = t.closest('[data-guidecopy]');
   if(gc){ copyText(gc, gc.closest('.cmd').querySelector('pre').textContent, 'Copy'); return; }
+  const retry = t.closest('[data-paste-retry]');
+  if(retry){ copyText(retry, MAC_PASTE_RETRY, 'Copy retry line'); return; }
   const c = t.closest('[data-copy]');
   if(c){
     const [i, j] = c.dataset.copy.split('.').map(Number);
@@ -3622,8 +3637,7 @@ function fallback(text, done){
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
-  try{ document.execCommand('copy'); done(); }catch(e){ ta.focus(); }
-  setTimeout(() => ta.remove(), 60);
+  try{ if(document.execCommand('copy')) done(); }finally{ setTimeout(() => ta.remove(), 60); }
 }
 
 document.getElementById('themeBtn').addEventListener('click', () => {
@@ -4102,6 +4116,7 @@ Object.values(ALLSTEPS).forEach(steps => {
     );
   });
 });
+
 
 render();
 window.scrollTo({top:0, behavior:'instant'});
