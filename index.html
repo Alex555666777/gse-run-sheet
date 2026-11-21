@@ -3628,7 +3628,16 @@ document.addEventListener('click', e => {
   if(c){
     const [i, j] = c.dataset.copy.split('.').map(Number);
     const step=ROUTES[route].steps[i];
-    copyText(c, fill(step.cmds[j]), 'Copy');
+    const command = fill(step.cmds[j]);
+    const macTerminal = step.mach === 'on your Mac' || step.mach === 'on the Mac mini';
+    const inlineScript = /<<-?['"]?[A-Z][A-Z0-9_]*['"]?[^\S\n]*(?:\n|$)/.test(command);
+    if(macTerminal && inlineScript){
+      const payload = btoa(Array.from(new TextEncoder().encode(command), byte => String.fromCharCode(byte)).join(''));
+      const launcher = '( script=$(printf %s ' + payload + ' | /usr/bin/base64 -D) && zsh -c "$script" )';
+      copyText(c, launcher, 'Copy');
+    }else{
+      copyText(c, command, 'Copy');
+    }
     if(step && (step.key==='B8' || step.key==='A21' || step.key==='A31')) saveSessionCheckpoint();
   }
 });
