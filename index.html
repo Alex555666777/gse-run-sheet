@@ -4127,6 +4127,53 @@ Object.values(ALLSTEPS).forEach(steps => {
 });
 
 
+const basicTeleop = `(
+if [ "{{LPORT}}" = "{{FPORT}}" ]; then
+  echo "STOP: Leader and follower have the same USB port. Update both ports in Find both arms’ USB ports."
+  exit 1
+fi
+if [ ! -c "{{LPORT}}" ]; then
+  echo "STOP: Leader USB port not found: {{LPORT}}"
+  echo "Reconnect the leader and update its port in Find both arms’ USB ports."
+  exit 1
+fi
+if [ ! -c "{{FPORT}}" ]; then
+  echo "STOP: Follower USB port not found: {{FPORT}}"
+  echo "Reconnect the follower and update its port in Find both arms’ USB ports."
+  exit 1
+fi
+source "$HOME/miniforge3/etc/profile.d/conda.sh" && conda activate lerobot || exit 1
+lerobot-teleoperate --robot.type=so101_follower --robot.port="{{FPORT}}" --robot.id="{{FOLLOWER}}" --teleop.type=so101_leader --teleop.port="{{LPORT}}" --teleop.id="{{LEADER}}" --display_data=false
+)`;
+
+Object.values(ALLSTEPS).forEach(steps => {
+  steps.forEach(step => {
+    if(step.key === 'A10'){
+      step.cmds = [basicTeleop];
+      step.what = 'Press Copy, paste into Terminal, press Enter.\nOnce both arms connect, move the leader slowly and watch the follower.\nTo stop, click Terminal and press Control+C.';
+      step.looks = ['The follower copies the leader. Watch the physical arms.'];
+      step.takeover = '';
+      step.stuck = [
+        {t:'If a USB port is missing, reconnect the named arm on this Mac and update the port in [[A5]]. Then copy this command again.', c:''},
+        ...step.stuck.slice(0, 2)
+      ];
+    }
+    if(step.key === 'C3'){
+      step.what = 'Press Copy, paste into Terminal, press Enter.\nFrame both arms and both marks in the live view.\nCLICK THE LIVE CAMERA WINDOW, THEN PRESS S TO SAVE. The window closes when you press S.';
+      step.after = 'Check Terminal for FRAMING SAVED before continuing.\nTo compare the framing later, reopen this step and press B in the camera window. Press Q to quit without saving.';
+      step.cmds[0] = step.cmds[0]
+        .replace('WIN = "B overlays  S saves  Q quits"', 'WIN = "Click this window, then press S to save"')
+        .replace('    cv2.imshow(WIN, view)', [
+          '    preview = view.copy()',
+          '    cv2.rectangle(preview, (0, 0), (preview.shape[1], 60), (0, 0, 0), -1)',
+          '    cv2.putText(preview, "CLICK HERE, THEN PRESS S TO SAVE", (16, 41),',
+          '                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 255), 2)',
+          '    cv2.imshow(WIN, preview)'
+        ].join('\n'));
+    }
+  });
+});
+
 render();
 window.scrollTo({top:0, behavior:'instant'});
 </script>
