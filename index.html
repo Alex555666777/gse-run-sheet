@@ -3274,16 +3274,16 @@ function pasteRecoveryHtml(){
     + esc(MAC_PASTE_RETRY) + '</pre></div></div></details>';
 }
 
-const IPHONE_CAMERA_CHECK = 'source "$HOME/miniforge3/etc/profile.d/conda.sh" && conda activate lerobot && lerobot-find-cameras opencv';
+const OPENCV_CAMERA_CHECK = 'source "$HOME/miniforge3/etc/profile.d/conda.sh" && conda activate lerobot && lerobot-find-cameras opencv';
 
 function cameraConnectionHtml(s){
   if(s.key === 'A5'){
-    return '<p class="link-note">On a two-port Mac? Plug the leader and follower directly into the two ports. Set up a wireless iPhone in '
+    return '<p class="link-note">On a two-port Mac? Plug the leader and follower directly into the two ports. Set up your iPhone or Android phone wirelessly in '
       + lineText('[[A9]]') + '.</p>';
   }
   if(s.key !== 'A9') return '';
   return `<p class="subhead">Choose how to connect your camera</p>
-    <p><strong>For USB camera users</strong> Plug the camera into the Mac running LeRobot and continue to the camera-number command below.</p>
+    <p><strong>For USB camera users with a spare port</strong> Plug the camera into the Mac running LeRobot and continue to the camera-number command below.</p>
     <details class="optblk">
       <summary><b>For iPhone camera users</b> · Connect wirelessly with Continuity Camera</summary>
       <div class="optbody">
@@ -3302,8 +3302,28 @@ function cameraConnectionHtml(s){
           <li><strong>Missing in FaceTime:</strong> Recheck the Apple Account and wireless settings. Unlock and relock the phone in landscape. If you tapped Disconnect on the phone, temporarily connect it by USB, trust the Mac if prompted, and confirm it appears before unplugging it and restoring both arms.</li>
           <li><strong>Visible in FaceTime but missing in Terminal:</strong> Quit apps using the camera. On the Mac, check <strong>System Settings → Privacy &amp; Security → Camera</strong> for Terminal or your terminal app. Then copy and run this LeRobot diagnostic in the recording Mac’s Terminal and check which OpenCV devices it detects.</li>
         </ul>
-        <div class="cmd bare"><button type="button" class="copy" data-copychip="${esc(IPHONE_CAMERA_CHECK).replace(/"/g, '&quot;')}">Copy</button><pre>${esc(IPHONE_CAMERA_CHECK)}</pre></div>
+        <div class="cmd bare"><button type="button" class="copy" data-copychip="${esc(OPENCV_CAMERA_CHECK).replace(/"/g, '&quot;')}">Copy</button><pre>${esc(OPENCV_CAMERA_CHECK)}</pre></div>
         <p><a href="https://support.apple.com/en-us/102546" target="_blank" rel="noopener noreferrer">Apple Continuity Camera setup and troubleshooting</a></p>
+      </div>
+    </details>
+    <details class="optblk">
+      <summary><b>For Android camera users</b> · Connect wirelessly with Camo</summary>
+      <div class="optbody">
+        <ol class="what doit">
+          <li>Plug the leader and follower directly into the two USB ports on the MacBook Air running LeRobot. Connect the phone over Wi-Fi. If it needs charging, use a wall adapter.</li>
+          <li>Install <strong>Camo Studio</strong> on the Mac (macOS 12.3 or later for Wi-Fi pairing) and <strong>Camo Camera</strong> on the Android phone. Connect both devices to the same Wi-Fi network.</li>
+          <li>In Camo Studio, choose <strong>Device → + Pair Camo Camera</strong>. In the phone app, tap the wireless connection button and scan the QR code shown on the Mac.</li>
+          <li>Mount the phone horizontally with the rear camera aimed at both arms and both marks. Confirm the live feed in Camo Studio and leave it running.</li>
+          <li>Run the camera-number command below. Select the preview showing the view from the Android phone. Seeing the feed in this step confirms that LeRobot can capture it.</li>
+          <li>At ${lineText('[[C3]]')}, click inside the live preview and press <kbd>S</kbd>. Check Terminal for <strong>FRAMING SAVED</strong>. Record and play back one short episode before starting the full batch.</li>
+        </ol>
+        <p class="subhead">If the camera is missing</p>
+        <ul class="what">
+          <li><strong>Missing in Camo Studio:</strong> Check that both devices are on the same Wi-Fi network and pair again.</li>
+          <li><strong>Visible in Camo Studio but missing in Step 9:</strong> If Camo prompts you to enable its virtual camera, follow the prompt. Check <strong>System Settings → Privacy &amp; Security → Camera</strong> for Terminal or your terminal app, then rerun the camera-number command. Use the diagnostic below if the feed still does not appear.</li>
+        </ul>
+        <div class="cmd bare"><button type="button" class="copy" data-copychip="${esc(OPENCV_CAMERA_CHECK).replace(/"/g, '&quot;')}">Copy</button><pre>${esc(OPENCV_CAMERA_CHECK)}</pre></div>
+        <p><a href="https://camo.com/support/camo/camo-getting-started" target="_blank" rel="noopener noreferrer">Camo setup and Wi-Fi pairing instructions</a></p>
       </div>
     </details>`;
 }
